@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Our Wishlist - Couple Pairing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+        
+        body { 
+            font-family: 'Noto Sans TC', sans-serif; 
+            -webkit-tap-highlight-color: transparent;
+            background-color: #fff5f7;
+            margin: 0;
+            min-height: 100vh;
+        }
+
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        
+        .animate-in {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .bg-sweet-pink { background-color: #ff85a2; }
+        .text-sweet-pink { color: #ff85a2; }
+        .border-sweet-pink { border-color: #ff85a2; }
+        
+        .pairing-card {
+            background: linear-gradient(135deg, #ff85a2 0%, #ff6b95 100%);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+        import { getFirestore, collection, doc, addDoc, updateDoc, onSnapshot, getDoc, setDoc, deleteDoc, query, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+
+        // 使用您指定的 Firebase Config
+        const firebaseConfig = {
+            apiKey: "AIzaSyBGcnegRndW5qbPI_WdPpMgjBpOHfVa01Y",
+            authDomain: "ourwishlist-2f954.firebaseapp.com",
+            projectId: "ourwishlist-2f954",
+            storageBucket: "ourwishlist-2f954.firebasestorage.app",
+            messagingSenderId: "825117136968",
+            appId: "1:825117136968:web:47e4562a2ea4f65393a07d",
+            measurementId: "G-NS09F6BNN6"
+        };        
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = 'couple-wishlist-v2-stable';
+
+        const { useState, useEffect, useMemo, useCallback } = React;
+
+        const SVG_LIB = {
+            plus: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>`,
+            heart: (fill = "none") => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="${fill}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>`,
+            utensils: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>`,
+            mapPin: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
+            music: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`,
+            checkCircle: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
+            user: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+            trash: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>`,
+            edit: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>`,
+            star: (fill = "none") => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="${fill}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+            copy: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`,
+            link: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
+            x: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`,
+            calendar: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+            qr: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg>`,
+            chevronDown: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`,
+            chevronUp: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>`
+        };
+
+        const RawIcon = ({ name, size = 18, className = "", fill = "none" }) => {
+            const svgContent = typeof SVG_LIB[name] === 'function' ? SVG_LIB[name](fill) : SVG_LIB[name];
+            return React.createElement('div', {
+                className: `inline-flex items-center justify-center ${className}`,
+                style: { width: size, height: size },
+                dangerouslySetInnerHTML: { __html: svgContent }
+            });
+        };
+
+        function App() {
+            const [user, setUser] = useState(null);
+            // 核心變數：強迫全局依賴這個穩定的 userId，忽略 Firebase 亂變的 UID
+            const [userId, setUserId] = useState(null); 
+            
+            const [profile, setProfile] = useState({ name: '', shortCode: '' });
+            const [partner, setPartner] = useState({ partnerId: null, partnerName: '' });
+            const [items, setItems] = useState([]);
+            const [filter, setFilter] = useState('all');
+            
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editingItem, setEditingItem] = useState(null);
+            const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+            const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
+            const [showMyCodeSection, setShowMyCodeSection] = useState(false);
+            
+            const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, itemId: null });
+            const [ratingModal, setRatingModal] = useState({ isOpen: false, itemId: null, score: 5, comment: '' });
+            
+            const [pairingInput, setPairingInput] = useState('');
+            const [toast, setToast] = useState({ show: false, message: '' });
+            const [localNameInput, setLocalNameInput] = useState('');
+
+            const [formData, setFormData] = useState({
+                title: '', category: 'restaurant', dateRange: '', description: '', completed: false
+            });
+
+            const showToast = useCallback((message) => {
+                setToast({ show: true, message });
+                setTimeout(() => setToast({ show: false, message: '' }), 3000);
+            }, []);
+
+            // 1. 核心修復：強制鎖定身份
+            useEffect(() => {
+                const unsubscribe = onAuthStateChanged(auth, async (currUser) => {
+                    if (currUser) {
+                        // 已經有用戶紀錄（重新整理會進入這裡）
+                        setUser(currUser);
+                        
+                        // 檢查本地是否有舊的 ID
+                        let savedUid = localStorage.getItem('couple_wishlist_uid_v4');
+                        if (!savedUid) {
+                            savedUid = currUser.uid;
+                            localStorage.setItem('couple_wishlist_uid_v4', savedUid);
+                        }
+                        setUserId(savedUid);
+                        // 將系統全數綁定至此穩定的 userId
+                    } else {
+                        // 確定完全沒有用戶紀錄，才建立新的匿名登入
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            try {
+                                await signInWithCustomToken(auth, __initial_auth_token);
+                            } catch (e) {
+                                await signInAnonymously(auth);
+                            }
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    }
+                });
+
+                return () => unsubscribe();
+            }, []);
+
+            // 2. 監聽個人資料
+            useEffect(() => {
+                if (!userId) return;
+                const profileRef = doc(db, 'artifacts', appId, 'users', userId, 'profile', 'info');
+                
+                const unsubscribe = onSnapshot(profileRef, async (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        setProfile(data);
+                        setLocalNameInput(data.name || '');
+                        
+                        if (data.shortCode && data.name) {
+                            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'short_codes', data.shortCode), { 
+                                uid: userId, name: data.name
+                            }, { merge: true });
+                        }
+                        if (!data.name) setIsProfileModalOpen(true);
+                    } else {
+                        const sc = userId.substring(0, 8).toUpperCase();
+                        const newProfile = { name: '', shortCode: sc, uid: userId };
+                        await setDoc(profileRef, newProfile);
+                        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'short_codes', sc), { uid: userId });
+                        setProfile(newProfile);
+                        setLocalNameInput('');
+                        setIsProfileModalOpen(true);
+                    }
+                });
+                return () => unsubscribe();
+            }, [userId]);
+
+            // 3. 監聽配對狀態
+            useEffect(() => {
+                if (!userId) return;
+                const q = collection(db, 'artifacts', appId, 'public', 'data', 'pairings');
+                const unsubscribe = onSnapshot(q, (snapshot) => {
+                    const data = snapshot.docs.map(doc => doc.data());
+                    const myPair = data.find(p => p.userA === userId || p.userB === userId);
+                    if (myPair) {
+                        const pId = myPair.userA === userId ? myPair.userB : myPair.userA;
+                        const pName = myPair.userA === userId ? myPair.userBName : myPair.userAName;
+                        setPartner({ partnerId: pId, partnerName: pName });
+                    }
+                });
+                return () => unsubscribe();
+            }, [userId]);
+
+            // 4. 監聽願望清單
+            useEffect(() => {
+                if (!userId) return;
+                const q = collection(db, 'artifacts', appId, 'public', 'data', 'wishlist');
+                const unsubscribe = onSnapshot(q, (snapshot) => {
+                    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    const filtered = data.filter(item => 
+                        item.createdBy === userId || (partner.partnerId && item.createdBy === partner.partnerId)
+                    );
+                    filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                    setItems(filtered);
+                }, (err) => console.error("Snapshot error:", err));
+                return () => unsubscribe();
+            }, [userId, partner.partnerId]);
+
+            const saveProfile = async (e) => {
+                e.preventDefault();
+                if (!localNameInput.trim() || !userId) return;
+                const name = localNameInput.trim();
+                
+                await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'info'), { name });
+                
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'short_codes', profile.shortCode), { 
+                    uid: userId, name: name
+                }, { merge: true });
+
+                showToast("個人資料已更新");
+                if (partner.partnerId) setIsProfileModalOpen(false);
+            };
+
+            const handlePairing = async () => {
+                const input = pairingInput.trim().toUpperCase();
+                if (!input || input === profile.shortCode) {
+                    showToast("請輸入正確的配對碼");
+                    return;
+                }
+                
+                try {
+                    const scRef = doc(db, 'artifacts', appId, 'public', 'data', 'short_codes', input);
+                    const scSnap = await getDoc(scRef);
+                    if (!scSnap.exists() || !scSnap.data().name) {
+                        showToast("找不到該用戶或對方尚未設定暱稱");
+                        return;
+                    }
+                    
+                    const partnerUid = scSnap.data().uid;
+                    const partnerName = scSnap.data().name;
+
+                    // 檢查對方是否已經跟別人配對了 (防止一對多)
+                    const partnerProfileRef = doc(db, 'artifacts', appId, 'users', partnerUid, 'profile', 'info');
+                    const partnerProfileSnap = await getDoc(partnerProfileRef);
+                    if (partnerProfileSnap.exists()) {
+                        const partnerProfileData = partnerProfileSnap.data();
+                        if (partnerProfileData.partnerId && partnerProfileData.partnerId !== userId) {
+                            showToast("該代碼的用戶已經與其他人配對了！");
+                            return;
+                        }
+                    }
+
+                    // 雙向配對寫入
+                    await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'info'), {
+                        partnerId: partnerUid,
+                        partnerName: partnerName
+                    });
+
+                    await updateDoc(partnerProfileRef, {
+                        partnerId: userId,
+                        partnerName: profile.name
+                    });
+
+                    // 寫入公共配對大廳，雙方即時感應
+                    const pairId = [userId, partnerUid].sort().join('_');
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pairings', pairId), {
+                        userA: userId,
+                        userAName: profile.name,
+                        userB: partnerUid,
+                        userBName: partnerName,
+                        timestamp: new Date().toISOString()
+                    });
+
+                    showToast("配對成功！ ❤️");
+                    setPairingInput('');
+                    setIsProfileModalOpen(false);
+                } catch (err) {
+                    console.error("Pairing Error:", err);
+                    showToast("配對失敗");
+                }
+            };
+
+            const copyMyShortCode = () => {
+                if (!profile.shortCode) return;
+                const dummy = document.createElement("textarea");
+                document.body.appendChild(dummy);
+                dummy.value = profile.shortCode;
+                dummy.select();
+                document.execCommand("copy");
+                document.body.removeChild(dummy);
+                showToast("配對碼已複製！");
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!formData.title || !userId) return;
+                try {
+                    if (editingItem) {
+                        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'wishlist', editingItem.id);
+                        await updateDoc(docRef, {
+                            title: formData.title, category: formData.category,
+                            dateRange: formData.category === 'event' ? formData.dateRange : '',
+                            description: formData.description
+                        });
+                    } else {
+                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'wishlist'), {
+                            ...formData,
+                            dateRange: formData.category === 'event' ? formData.dateRange : '',
+                            ratings: {}, createdBy: userId,
+                            createdByName: profile.name || '夥伴',
+                            createdAt: new Date().toISOString()
+                        });
+                    }
+                    closeMainModal();
+                } catch (err) { console.error(err); }
+            };
+
+            const closeMainModal = () => {
+                setIsModalOpen(false);
+                setEditingItem(null);
+                setFormData({ title: '', category: 'restaurant', dateRange: '', description: '', completed: false });
+            };
+
+            const toggleComplete = async (item) => {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'wishlist', item.id);
+                await updateDoc(docRef, { completed: !item.completed });
+            };
+
+            const submitRating = async () => {
+                const { itemId, score, comment } = ratingModal;
+                const item = items.find(i => i.id === itemId);
+                const updatedRatings = { 
+                    ...(item.ratings || {}), 
+                    [userId]: { score, comment: comment.trim(), userName: profile.name || '夥伴', time: new Date().toISOString() } 
+                };
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'wishlist', itemId), { ratings: updatedRatings });
+                setRatingModal({ isOpen: false, itemId: null, score: 5, comment: '' });
+                showToast("評價已儲存");
+            };
+
+            const filteredItems = useMemo(() => {
+                if (filter === 'all') return items.filter(i => !i.completed);
+                if (filter === 'completed') return items.filter(i => i.completed);
+                return items.filter(i => i.category === filter && !i.completed);
+            }, [items, filter]);
+
+            if (!userId || !user) return React.createElement('div', { className: 'min-h-screen flex items-center justify-center bg-[#fff5f7]' }, [
+                React.createElement('div', { className: 'text-sweet-pink font-bold animate-pulse' }, '正在進入甜蜜空間...')
+            ]);
+
+            return React.createElement('div', { className: 'min-h-screen pb-24 bg-[#fff5f7]' }, [
+                // Toast
+                toast.show && React.createElement('div', { className: 'fixed top-10 left-1/2 -translate-x-1/2 z-[200] bg-slate-800 text-white px-6 py-3 rounded-2xl shadow-xl font-bold text-sm animate-in flex items-center gap-2' }, [
+                    React.createElement(RawIcon, { name: 'heart', size: 14, fill: '#ff85a2' }), toast.message
+                ]),
+
+                // Header
+                React.createElement('header', { key: 'header', className: 'sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-pink-100 px-6 py-4 shadow-sm' }, 
+                    React.createElement('div', { className: 'flex items-center justify-between max-w-2xl mx-auto' }, [
+                        React.createElement('div', { className: 'flex items-center gap-2' }, [
+                             React.createElement(RawIcon, { name: 'heart', size: 24, fill: '#ff85a2', className: 'text-sweet-pink' }),
+                             React.createElement('h1', { className: 'text-xl font-black text-slate-800 tracking-tight' }, 'Our Wishlist')
+                        ]),
+                        React.createElement('div', { className: 'flex items-center gap-2' }, [
+                            React.createElement('button', { onClick: () => setIsCodeModalOpen(true), className: 'p-2.5 text-sweet-pink bg-pink-50 rounded-xl hover:bg-pink-100 transition-colors flex items-center justify-center' }, React.createElement(RawIcon, { name: 'qr', size: 20 })),
+                            React.createElement('button', { onClick: () => setIsProfileModalOpen(true), className: 'p-2.5 text-slate-400 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors flex items-center justify-center' }, React.createElement(RawIcon, { name: 'user', size: 20 })),
+                            React.createElement('button', { onClick: () => setIsModalOpen(true), className: 'bg-sweet-pink text-white px-4 py-2.5 rounded-xl shadow-lg shadow-pink-100 text-sm font-black flex items-center gap-2 hover:opacity-90 active:scale-95 transition-all' }, [
+                                React.createElement(RawIcon, { name: 'plus', size: 16 }), '新增'
+                            ])
+                        ])
+                    ])
+                ),
+
+                // Pair Status
+                partner.partnerId && React.createElement('div', { key: 'pair-status', className: 'max-w-2xl mx-auto px-4 mt-6' }, 
+                    React.createElement('div', { className: 'pairing-card p-5 rounded-[2rem] text-white shadow-xl flex items-center justify-between overflow-hidden relative' }, [
+                        React.createElement('div', { className: 'absolute -right-4 -top-4 opacity-20' }, React.createElement(RawIcon, { name: 'heart', size: 100, fill: 'white' })),
+                        React.createElement('div', { className: 'flex items-center gap-4' }, [
+                            React.createElement('div', { className: 'flex -space-x-3' }, [
+                                React.createElement('div', { className: 'w-12 h-12 rounded-full border-4 border-white/30 bg-white/20 flex items-center justify-center font-black text-lg' }, profile.name?.[0] || '?'),
+                                React.createElement('div', { className: 'w-12 h-12 rounded-full border-4 border-white/30 bg-white/20 flex items-center justify-center font-black text-lg' }, partner.partnerName?.[0] || '?')
+                            ]),
+                            React.createElement('div', null, [
+                                React.createElement('p', { className: 'text-[10px] font-black opacity-80 uppercase tracking-widest' }, 'Connected with'),
+                                React.createElement('h2', { className: 'text-xl font-black' }, partner.partnerName)
+                            ])
+                        ]),
+                        React.createElement('div', { className: 'bg-white/20 px-4 py-2 rounded-full text-xs font-black backdrop-blur-md' }, '甜蜜同行中')
+                    ])
+                ),
+
+                // Tabs
+                React.createElement('div', { key: 'tabs', className: 'max-w-2xl mx-auto px-4 py-6 overflow-x-auto flex gap-2 scrollbar-hide' }, [
+                    { id: 'all', label: '待出發', icon: 'heart' },
+                    { id: 'restaurant', label: '餐廳', icon: 'utensils' },
+                    { id: 'spot', label: '景點', icon: 'mapPin' },
+                    { id: 'event', label: '活動', icon: 'music' },
+                    { id: 'completed', label: '已踩點', icon: 'checkCircle' }
+                ].map(tab => React.createElement('button', {
+                    key: tab.id,
+                    onClick: () => setFilter(tab.id),
+                    className: `flex items-center gap-1.5 px-5 py-2.5 rounded-2xl text-xs font-black whitespace-nowrap transition-all ${filter === tab.id ? 'bg-sweet-pink text-white shadow-md' : 'bg-white text-slate-400 border border-pink-100 hover:bg-pink-50'}`
+                }, [
+                    React.createElement(RawIcon, { name: tab.icon, size: 14, fill: filter === tab.id ? 'white' : 'none', className: filter === tab.id ? 'text-white' : 'text-slate-300' }), tab.label
+                ]))),
+
+                // Main Content
+                React.createElement('main', { key: 'main', className: 'max-w-2xl mx-auto px-4 space-y-4' }, 
+                    filteredItems.length === 0 ? 
+                    (filter !== 'completed' ? React.createElement('div', { className: 'text-center py-20 px-10 bg-white/60 rounded-[2rem] border-2 border-dashed border-pink-100 flex flex-col items-center' }, [
+                        React.createElement('div', { className: 'mb-4 p-4 bg-pink-50 rounded-full flex items-center justify-center' }, React.createElement(RawIcon, { name: 'heart', size: 32, className: 'text-pink-300', fill: '#fee2e2' })),
+                        React.createElement('p', { className: 'text-slate-800 font-black text-base mb-1' }, '這裡空空的...'),
+                        React.createElement('p', { className: 'text-slate-400 font-bold text-xs' }, '快點跟另一半一起新增願望吧！ ✨'),
+                        React.createElement('button', { onClick: () => setIsModalOpen(true), className: 'mt-6 text-sweet-pink text-xs font-black underline underline-offset-4' }, '點我開始新增')
+                    ]) : React.createElement('div', { className: 'text-center py-20 px-10' }, [
+                         React.createElement('p', { className: 'text-slate-400 font-bold text-xs' }, '尚未有已完成的踩點紀錄喔！ 📸')
+                    ])) :
+                    filteredItems.map(item => React.createElement('div', { key: item.id, className: 'bg-white rounded-[2rem] p-6 border border-pink-50 shadow-sm relative animate-in' }, [
+                        React.createElement('div', { className: 'flex justify-between items-start mb-4' }, [
+                            React.createElement('div', { className: 'bg-pink-50 p-3 rounded-2xl flex items-center justify-center' }, React.createElement(RawIcon, { 
+                                name: item.category === 'restaurant' ? 'utensils' : item.category === 'spot' ? 'mapPin' : item.category === 'event' ? 'music' : 'heart',
+                                className: item.category === 'restaurant' ? 'text-orange-400' : item.category === 'spot' ? 'text-sky-400' : 'text-purple-400',
+                                size: 24
+                            })),
+                            React.createElement('div', { className: 'flex gap-1.5' }, [
+                                React.createElement('button', { onClick: () => toggleComplete(item), className: `p-2.5 rounded-full flex items-center justify-center transition-all ${item.completed ? 'bg-green-400 text-white shadow-lg' : 'bg-slate-50 text-slate-300 hover:text-sweet-pink'}` }, React.createElement(RawIcon, { name: 'checkCircle', size: 20 })),
+                                !item.completed && React.createElement('button', { onClick: () => {
+                                    setEditingItem(item);
+                                    setFormData({ title: item.title, category: item.category, dateRange: item.dateRange || '', description: item.description || '', completed: item.completed });
+                                    setIsModalOpen(true);
+                                }, className: 'p-2.5 bg-slate-50 text-slate-300 hover:text-blue-400 rounded-full flex items-center justify-center transition-all' }, React.createElement(RawIcon, { name: 'edit', size: 20 })),
+                                !item.completed && React.createElement('button', { onClick: () => setDeleteConfirm({ isOpen: true, itemId: item.id }), className: 'p-2.5 bg-slate-50 text-slate-300 hover:text-red-400 rounded-full flex items-center justify-center transition-all' }, React.createElement(RawIcon, { name: 'trash', size: 20 }))
+                            ])
+                        ]),
+                        React.createElement('h3', { className: 'text-xl font-black mb-1.5 text-slate-800' }, item.title),
+                        item.category === 'event' && item.dateRange && React.createElement('div', { className: 'text-sweet-pink text-xs font-bold mb-2.5 flex items-center gap-1.5 bg-pink-50 px-3 py-1.5 rounded-lg w-fit' }, [
+                            React.createElement(RawIcon, { name: 'calendar', size: 14 }), item.dateRange
+                        ]),
+                        React.createElement('p', { className: 'text-slate-500 text-sm mb-5 leading-relaxed whitespace-pre-wrap' }, item.description),
+                        React.createElement('div', { className: 'flex items-center justify-between pt-4 border-t border-slate-50' }, [
+                            React.createElement('div', { className: 'flex items-center gap-1.5 text-[10px] font-bold text-slate-400' }, [
+                                React.createElement('div', { className: 'w-6 h-6 bg-pink-100 rounded-full flex items-center justify-center text-[10px] text-sweet-pink font-black border-2 border-white shadow-sm' }, item.createdByName?.[0] || '?'),
+                                React.createElement('span', null, `${item.createdByName} 提議`)
+                            ]),
+                            React.createElement('div', { className: 'flex -space-x-2' }, Object.keys(item.ratings || {}).map(uid => 
+                                React.createElement('div', { key: uid, title: item.ratings[uid].userName, className: 'w-7 h-7 rounded-full bg-pink-300 border-2 border-white flex items-center justify-center text-[10px] text-white font-black shadow-sm' }, item.ratings[uid].userName?.[0] || '?')
+                            ))
+                        ]),
+                        item.completed && React.createElement('div', { className: 'mt-4 pt-4 border-t border-pink-50 space-y-3' }, [
+                            ...Object.entries(item.ratings || {}).map(([uid, r]) => React.createElement('div', { key: uid, className: 'bg-slate-50/50 p-4 rounded-2xl relative pb-8' }, [
+                                React.createElement('div', { className: 'flex justify-between items-center mb-1.5' }, [
+                                    React.createElement('span', { className: 'text-[10px] font-black text-slate-400 uppercase tracking-wider' }, `${r.userName} 的評價`),
+                                    React.createElement('div', { className: 'flex items-center text-yellow-400 gap-0.5' }, [React.createElement(RawIcon, { name: 'star', size: 12, fill: '#facc15' }), React.createElement('span', { className: 'text-xs font-bold' }, r.score)])
+                                ]),
+                                r.comment && React.createElement('p', { className: 'text-sm text-slate-600 font-medium' }, r.comment),
+                                uid === userId && React.createElement('button', { 
+                                    onClick: () => setRatingModal({ isOpen: true, itemId: item.id, score: r.score, comment: r.comment }),
+                                    className: 'absolute bottom-3 right-4 text-[10px] text-blue-400 font-black flex items-center gap-1 bg-white/50 px-2 py-1 rounded-md'
+                                }, [React.createElement(RawIcon, { name: 'edit', size: 10 }), '編輯評價'])
+                            ])),
+                            !(item.ratings || {})[userId] && React.createElement('button', { 
+                                onClick: () => setRatingModal({ isOpen: true, itemId: item.id, score: 5, comment: '' }),
+                                className: 'w-full py-4 border-2 border-dashed border-pink-100 rounded-2xl text-pink-300 text-sm font-black flex items-center justify-center gap-2 hover:bg-pink-50 transition-all'
+                            }, [React.createElement(RawIcon, { name: 'plus', size: 18 }), '分享我的踩點心得'])
+                        ])
+                    ]))
+                ),
+
+                // 獨立彈窗：專屬配對碼
+                isCodeModalOpen && React.createElement('div', { className: 'fixed inset-0 z-[110] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md' }, 
+                    React.createElement('div', { className: 'bg-white w-full max-sm rounded-[2.5rem] p-10 shadow-2xl animate-in text-center relative' }, [
+                        React.createElement('button', { onClick: () => setIsCodeModalOpen(false), className: 'absolute top-6 right-6 text-slate-300 hover:text-pink-400 transition-colors' }, React.createElement(RawIcon, { name: 'x', size: 24 })),
+                        
+                        React.createElement('div', { className: 'bg-pink-50 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6 text-sweet-pink shadow-inner' }, React.createElement(RawIcon, { name: 'qr', size: 40 })),
+                        React.createElement('h2', { className: 'text-xl font-black text-slate-800 mb-2' }, '專屬配對碼'),
+                        React.createElement('p', { className: 'text-xs font-bold text-slate-400 mb-8 leading-relaxed' }, '將此代碼分享給對方，\n讓對方在「個人設定」中輸入。'),
+                        
+                        React.createElement('div', { className: 'bg-slate-50 p-6 rounded-[2rem] border-2 border-pink-100 flex flex-col items-center gap-4 mb-4' }, [
+                            React.createElement('span', { className: 'text-[10px] font-black text-pink-300 uppercase tracking-widest' }, 'YOUR UNIQUE CODE'),
+                            React.createElement('div', { className: 'text-3xl font-black text-slate-700 tracking-[0.2em]' }, profile.shortCode || '生成中...'),
+                            React.createElement('button', { onClick: copyMyShortCode, className: 'bg-sweet-pink text-white px-6 py-3 rounded-2xl font-black text-sm shadow-lg shadow-pink-100 flex items-center gap-2 active:scale-95 transition-all' }, [
+                                React.createElement(RawIcon, { name: 'copy', size: 16 }), '點擊複製'
+                            ])
+                        ])
+                    ])
+                ),
+
+                // 彈窗：個人資訊與配對輸入
+                isProfileModalOpen && React.createElement('div', { className: 'fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md overflow-y-auto' }, 
+                    React.createElement('div', { className: 'bg-white w-full max-sm rounded-[2.5rem] p-8 shadow-2xl animate-in relative my-auto' }, [
+                        profile.name && React.createElement('button', { onClick: () => setIsProfileModalOpen(false), className: 'absolute top-6 right-6 text-slate-300 hover:text-pink-400 transition-colors' }, React.createElement(RawIcon, { name: 'x', size: 24 })),
+                        
+                        React.createElement('div', { className: 'space-y-8' }, [
+                            // 暱稱設定
+                            React.createElement('section', null, [
+                                React.createElement('h2', { className: 'text-xl font-black mb-1 text-slate-800' }, '個人設定'),
+                                React.createElement('p', { className: 'text-[10px] font-bold text-slate-400 mb-6 uppercase tracking-wider' }, 'Profile Settings'),
+                                React.createElement('form', { onSubmit: saveProfile, className: 'space-y-4' }, [
+                                    React.createElement('div', { className: 'space-y-1' }, [
+                                        React.createElement('label', { className: 'text-[10px] font-black text-slate-400 ml-1' }, '您的暱稱'),
+                                        React.createElement('input', { className: 'w-full p-4 bg-slate-50 rounded-2xl font-black outline-none border-2 border-transparent focus:border-pink-100 transition-all text-slate-700', placeholder: '輸入您的暱稱', value: localNameInput, onChange: e => setLocalNameInput(e.target.value), required: true })
+                                    ]),
+                                    React.createElement('button', { type: 'submit', className: 'w-full bg-slate-800 text-white py-4 rounded-2xl font-black active:scale-95 transition-all shadow-lg' }, '儲存並更新資料')
+                                ])
+                            ]),
+
+                            // 配對選項 (已設定暱稱時顯示)
+                            profile.name && React.createElement('section', { className: 'animate-in pt-6 border-t-2 border-dashed border-pink-50 space-y-4' }, [
+                                React.createElement('h3', { className: 'text-sm font-black text-slate-800 flex items-center gap-2' }, [
+                                    React.createElement(RawIcon, { name: 'link', size: 16, className: 'text-sweet-pink' }), '與另一半連線'
+                                ]),
+                                
+                                // 配對碼展開框
+                                React.createElement('div', { className: 'space-y-3' }, [
+                                    React.createElement('button', { 
+                                        onClick: () => setShowMyCodeSection(!showMyCodeSection),
+                                        className: 'w-full p-4 bg-pink-50/50 rounded-2xl text-sweet-pink font-black text-xs flex items-center justify-between hover:bg-pink-50 transition-colors border border-pink-100'
+                                    }, [
+                                        '獲取我的專屬配對碼',
+                                        React.createElement(RawIcon, { name: showMyCodeSection ? 'chevronUp' : 'chevronDown', size: 16 })
+                                    ]),
+                                    
+                                    showMyCodeSection && React.createElement('div', { className: 'p-6 bg-white border-2 border-pink-100 rounded-[2rem] shadow-inner animate-in text-center space-y-3' }, [
+                                        React.createElement('p', { className: 'text-[10px] font-bold text-slate-400 uppercase tracking-widest' }, '您的 8 位配對碼'),
+                                        React.createElement('div', { className: 'flex items-center gap-2' }, [
+                                            React.createElement('div', { className: 'flex-1 bg-slate-50 py-3.5 rounded-xl font-black text-xl text-slate-700 tracking-widest' }, profile.shortCode || '生成中...'),
+                                            React.createElement('button', { onClick: copyMyShortCode, className: 'p-3.5 bg-sweet-pink text-white rounded-xl shadow-md active:scale-90 transition-all' }, React.createElement(RawIcon, { name: 'copy', size: 18 }))
+                                        ]),
+                                        React.createElement('p', { className: 'text-[9px] text-slate-400 font-medium' }, '將此代碼傳給另一半，由他在下方輸入')
+                                    ])
+                                ]),
+
+                                // 輸入對方代碼
+                                !partner.partnerId && React.createElement('div', { className: 'space-y-3 pt-2' }, [
+                                    React.createElement('p', { className: 'text-[10px] font-bold text-slate-400 pl-1' }, '輸入對方的配對碼：'),
+                                    React.createElement('div', { className: 'flex flex-col gap-2' }, [
+                                        React.createElement('input', { 
+                                            className: 'w-full p-4 bg-slate-50 rounded-2xl font-black text-center tracking-widest outline-none border-2 border-transparent focus:border-pink-200 transition-all text-slate-700 uppercase',
+                                            placeholder: '輸入對方的 8 位代碼',
+                                            value: pairingInput,
+                                            onChange: e => setPairingInput(e.target.value)
+                                        }),
+                                        React.createElement('button', { onClick: handlePairing, className: 'w-full bg-sweet-pink text-white py-4 rounded-2xl font-black shadow-lg shadow-pink-100 active:scale-95 transition-all mt-1' }, '送出配對請求')
+                                    ])
+                                ]),
+
+                                // 已配對狀態
+                                partner.partnerId && React.createElement('div', { className: 'bg-green-50 p-4 rounded-2xl flex items-center gap-3 border border-green-100' }, [
+                                    React.createElement(RawIcon, { name: 'checkCircle', size: 20, className: 'text-green-500' }),
+                                    React.createElement('p', { className: 'text-xs font-black text-green-700' }, `已連線到：${partner.partnerName}`)
+                                ])
+                            ])
+                        ])
+                    ])
+                ),
+
+                // Modal: Add/Edit
+                isModalOpen && React.createElement('div', { className: 'fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm' }, 
+                    React.createElement('div', { className: 'bg-white w-full max-md rounded-t-[2.5rem] sm:rounded-[2rem] p-8 animate-in shadow-2xl overflow-hidden' }, [
+                        React.createElement('div', { className: 'flex justify-between items-center mb-6' }, [
+                            React.createElement('h2', { className: 'text-xl font-black text-slate-800' }, editingItem ? '編輯願望' : '新增願望'),
+                            React.createElement('button', { onClick: closeMainModal, className: 'text-slate-300 hover:text-sweet-pink p-1 transition-colors flex items-center justify-center' }, React.createElement(RawIcon, { name: 'x', size: 24 }))
+                        ]),
+                        React.createElement('form', { onSubmit: handleSubmit, className: 'space-y-5' }, [
+                            React.createElement('div', { className: 'grid grid-cols-3 gap-2' }, [
+                                { id: 'restaurant', label: '餐廳', icon: 'utensils' },
+                                { id: 'spot', label: '景點', icon: 'mapPin' },
+                                { id: 'event', label: '活動', icon: 'music' }
+                            ].map(c => 
+                                React.createElement('button', { key: c.id, type: 'button', onClick: () => setFormData({...formData, category: c.id}), className: `py-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all ${formData.category === c.id ? 'border-sweet-pink bg-pink-50 text-sweet-pink shadow-sm' : 'border-slate-50 text-slate-300'}` }, [
+                                    React.createElement(RawIcon, { name: c.icon, size: 24, className: formData.category === c.id ? 'text-sweet-pink' : 'text-slate-200' }),
+                                    React.createElement('span', { className: 'text-[10px] font-black' }, c.label)
+                                ])
+                            )),
+                            React.createElement('input', { className: 'w-full p-4 bg-slate-50 rounded-xl font-black outline-none focus:ring-4 ring-pink-100 text-slate-700', placeholder: '要把什麼列入計畫？', value: formData.title, onChange: e => setFormData({...formData, title: e.target.value}), required: true }),
+                            formData.category === 'event' && React.createElement('input', { className: 'w-full p-4 bg-pink-50/50 rounded-xl text-sweet-pink font-black outline-none', placeholder: '日期時間 (如: 5/20)', value: formData.dateRange, onChange: e => setFormData({...formData, dateRange: e.target.value}) }),
+                            React.createElement('textarea', { className: 'w-full p-4 bg-slate-50 rounded-xl h-24 outline-none focus:ring-4 ring-pink-100 text-slate-600', placeholder: '更多細節...', value: formData.description, onChange: e => setFormData({...formData, description: e.target.value}) }),
+                            React.createElement('button', { type: 'submit', className: 'w-full bg-sweet-pink text-white py-4.5 rounded-[1.5rem] font-black text-lg active:scale-95 transition-all shadow-md' }, '確定送出')
+                        ])
+                    ])
+                ),
+
+                // Modal: Rating
+                ratingModal.isOpen && React.createElement('div', { className: 'fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm' }, 
+                    React.createElement('div', { className: 'bg-white w-full max-w-sm rounded-[2.5rem] p-8 animate-in shadow-2xl relative' }, [
+                        React.createElement('button', { onClick: () => setRatingModal({isOpen: false}), className: 'absolute top-6 right-6 text-slate-300 hover:text-pink-400 flex items-center justify-center' }, React.createElement(RawIcon, { name: 'x', size: 20 })),
+                        React.createElement('h2', { className: 'text-lg font-black text-center mb-6 text-slate-800' }, '這次踩點給幾分？'),
+                        React.createElement('div', { className: 'flex justify-center gap-2 mb-6' }, [1,2,3,4,5].map(s => 
+                            React.createElement('button', { key: s, onClick: () => setRatingModal({...ratingModal, score: s}), className: 'transition-transform p-1 flex items-center justify-center' }, 
+                                React.createElement(RawIcon, { name: 'star', size: 36, fill: s <= ratingModal.score ? '#facc15' : 'none', className: s <= ratingModal.score ? 'text-yellow-400' : 'text-slate-100' })
+                            )
+                        )),
+                        React.createElement('textarea', { className: 'w-full p-4 bg-slate-50 rounded-2xl mb-4 h-28 outline-none focus:ring-4 ring-pink-100 text-slate-600 text-sm', placeholder: '寫下你的心情...', value: ratingModal.comment, onChange: e => setRatingModal({...ratingModal, comment: e.target.value}) }),
+                        React.createElement('button', { onClick: submitRating, className: 'w-full py-4 bg-sweet-pink text-white rounded-2xl font-black shadow-md' }, '儲存回憶')
+                    ])
+                ),
+
+                // Modal: Delete
+                deleteConfirm.isOpen && React.createElement('div', { className: 'fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm' }, 
+                    React.createElement('div', { className: 'bg-white w-full max-w-xs rounded-[2rem] p-8 text-center animate-in shadow-2xl' }, [
+                        React.createElement('h2', { className: 'text-lg font-black text-slate-800 mb-2' }, '確定要移除？'),
+                        React.createElement('div', { className: 'flex flex-col gap-2 mt-6' }, [
+                             React.createElement('button', { onClick: () => {
+                                deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'wishlist', deleteConfirm.itemId));
+                                setDeleteConfirm({ isOpen: false, itemId: null });
+                                showToast("已移除願望");
+                             }, className: 'w-full py-3.5 bg-red-400 text-white rounded-xl font-black active:scale-95 transition-all' }, '確認刪除'),
+                             React.createElement('button', { onClick: () => setDeleteConfirm({ isOpen: false, itemId: null }), className: 'w-full py-3.5 bg-slate-100 text-slate-500 rounded-xl font-black active:scale-95 transition-all' }, '取消')
+                        ])
+                    ])
+                ),
+
+                React.createElement('footer', { className: 'mt-12 text-center text-pink-200 text-[9px] font-black tracking-[0.3em] uppercase pb-8' }, 'Shared Love List • Build Together')
+            ]);
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(App));
+    </script>
+</body>
+</html>
