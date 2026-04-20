@@ -64,6 +64,8 @@
 
         const { useState, useEffect, useMemo, useCallback } = React;
 
+        const PREDEFINED_RESTAURANT_TYPES = ['火鍋', '燒烤', '港式', '義式', '日料', '早午餐', '甜點', '漢堡', '小吃', '其他'];
+
         const SVG_LIB = {
             plus: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>`,
             heart: (fill = "none") => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="${fill}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>`,
@@ -82,7 +84,8 @@
             qr: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg>`,
             chevronDown: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`,
             chevronUp: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>`,
-            arrowUp: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>`
+            arrowUp: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>`,
+            search: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>`
         };
 
         const RawIcon = ({ name, size = 18, className = "", fill = "none" }) => {
@@ -102,6 +105,7 @@
             const [partner, setPartner] = useState({ partnerId: null, partnerName: '' });
             const [items, setItems] = useState([]);
             const [filter, setFilter] = useState('all');
+            const [searchQuery, setSearchQuery] = useState('');
             
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [editingItem, setEditingItem] = useState(null);
@@ -118,7 +122,7 @@
             const [showScrollTop, setShowScrollTop] = useState(false);
 
             const [formData, setFormData] = useState({
-                title: '', category: 'restaurant', dateRange: '', description: '', completed: false
+                title: '', category: 'restaurant', dateRange: '', description: '', completed: false, subCategory: '', customSubCategory: ''
             });
 
             const showToast = useCallback((message) => {
@@ -139,7 +143,7 @@
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
-            // 1. 核心修復：強制鎖定身份（解決刷新問題）
+            // 1. 核心修復：強制鎖定身份
             useEffect(() => {
                 const unsubscribe = onAuthStateChanged(auth, async (currUser) => {
                     if (currUser) {
@@ -311,18 +315,26 @@
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 if (!formData.title || !userId) return;
+                
+                let finalSubCategory = '';
+                if (formData.category === 'restaurant') {
+                    finalSubCategory = formData.subCategory === '其他' ? formData.customSubCategory.trim() : formData.subCategory;
+                }
+
                 try {
                     if (editingItem) {
                         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'wishlist', editingItem.id);
                         await updateDoc(docRef, {
                             title: formData.title, category: formData.category,
                             dateRange: formData.category === 'event' ? formData.dateRange : '',
+                            subCategory: finalSubCategory,
                             description: formData.description
                         });
                     } else {
                         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'wishlist'), {
                             ...formData,
                             dateRange: formData.category === 'event' ? formData.dateRange : '',
+                            subCategory: finalSubCategory,
                             ratings: {}, createdBy: userId,
                             createdByName: profile.name || '夥伴',
                             createdAt: new Date().toISOString()
@@ -335,15 +347,14 @@
             const closeMainModal = () => {
                 setIsModalOpen(false);
                 setEditingItem(null);
-                setFormData({ title: '', category: 'restaurant', dateRange: '', description: '', completed: false });
+                setFormData({ title: '', category: 'restaurant', dateRange: '', description: '', completed: false, subCategory: '', customSubCategory: '' });
             };
 
-            // 修改：打勾時記錄完成時間
             const toggleComplete = async (item) => {
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'wishlist', item.id);
                 const updateData = { completed: !item.completed };
                 if (!item.completed) {
-                    updateData.completedAt = new Date().toISOString(); // 新增時間戳記
+                    updateData.completedAt = new Date().toISOString();
                 }
                 await updateDoc(docRef, updateData);
             };
@@ -360,22 +371,32 @@
                 showToast("評價已儲存");
             };
 
-            // 修改：讓已完成的項目根據完成時間排序
+            // 列表過濾 (包含新增的搜尋邏輯與排序)
             const filteredItems = useMemo(() => {
                 let result = [];
                 if (filter === 'all') result = items.filter(i => !i.completed);
                 else if (filter === 'completed') result = items.filter(i => i.completed);
                 else result = items.filter(i => i.category === filter && !i.completed);
 
+                // 處理搜尋關鍵字
+                if (searchQuery.trim()) {
+                    const q = searchQuery.toLowerCase();
+                    result = result.filter(i => 
+                        (i.title && i.title.toLowerCase().includes(q)) || 
+                        (i.description && i.description.toLowerCase().includes(q)) ||
+                        (i.subCategory && i.subCategory.toLowerCase().includes(q))
+                    );
+                }
+
                 if (filter === 'completed') {
                     result.sort((a, b) => {
                         const timeA = a.completedAt ? new Date(a.completedAt).getTime() : new Date(a.createdAt).getTime();
                         const timeB = b.completedAt ? new Date(b.completedAt).getTime() : new Date(b.createdAt).getTime();
-                        return timeB - timeA; // 最新完成的排最上面
+                        return timeB - timeA;
                     });
                 }
                 return result;
-            }, [items, filter]);
+            }, [items, filter, searchQuery]);
 
             if (!userId || !user) return React.createElement('div', { className: 'min-h-screen flex items-center justify-center bg-[#fff5f7]' }, [
                 React.createElement('div', { className: 'text-sweet-pink font-bold animate-pulse' }, '正在進入甜蜜空間...')
@@ -431,22 +452,41 @@
                     { id: 'completed', label: '已踩點', icon: 'checkCircle' }
                 ].map(tab => React.createElement('button', {
                     key: tab.id,
-                    onClick: () => setFilter(tab.id),
+                    onClick: () => { setFilter(tab.id); setSearchQuery(''); }, // 切換分類時清空搜尋
                     className: `flex items-center gap-1.5 px-5 py-2.5 rounded-2xl text-xs font-black whitespace-nowrap transition-all ${filter === tab.id ? 'bg-sweet-pink text-white shadow-md' : 'bg-white text-slate-400 border border-pink-100 hover:bg-pink-50'}`
                 }, [
                     React.createElement(RawIcon, { name: tab.icon, size: 14, fill: filter === tab.id ? 'white' : 'none', className: filter === tab.id ? 'text-white' : 'text-slate-300' }), tab.label
                 ]))),
 
                 // Main Content
-                React.createElement('main', { key: 'main', className: 'max-w-2xl mx-auto px-4 space-y-4' }, 
+                React.createElement('main', { key: 'main', className: 'max-w-2xl mx-auto px-4 space-y-4' }, [
+                    
+                    // 新增：搜尋列
+                    items.length > 0 && React.createElement('div', { key: 'search-bar', className: 'relative mb-2' }, [
+                        React.createElement('div', { className: 'absolute inset-y-0 left-4 flex items-center pointer-events-none' },
+                            React.createElement(RawIcon, { name: 'search', size: 16, className: 'text-pink-300' })
+                        ),
+                        React.createElement('input', {
+                            type: 'text',
+                            placeholder: '搜尋願望標題或分類...',
+                            value: searchQuery,
+                            onChange: (e) => setSearchQuery(e.target.value),
+                            className: 'w-full pl-10 pr-4 py-3.5 bg-white rounded-2xl border border-pink-50 text-sm font-bold text-slate-700 outline-none focus:border-pink-200 focus:ring-2 focus:ring-pink-50 transition-all shadow-sm placeholder:text-pink-200'
+                        }),
+                        searchQuery && React.createElement('button', { 
+                            onClick: () => setSearchQuery(''), 
+                            className: 'absolute inset-y-0 right-4 flex items-center text-slate-300 hover:text-pink-400' 
+                        }, React.createElement(RawIcon, { name: 'x', size: 14 }))
+                    ]),
+
                     filteredItems.length === 0 ? 
-                    (filter !== 'completed' ? React.createElement('div', { className: 'text-center py-20 px-10 bg-white/60 rounded-[2rem] border-2 border-dashed border-pink-100 flex flex-col items-center' }, [
+                    (filter !== 'completed' && !searchQuery ? React.createElement('div', { key: 'empty1', className: 'text-center py-20 px-10 bg-white/60 rounded-[2rem] border-2 border-dashed border-pink-100 flex flex-col items-center' }, [
                         React.createElement('div', { className: 'mb-4 p-4 bg-pink-50 rounded-full flex items-center justify-center' }, React.createElement(RawIcon, { name: 'heart', size: 32, className: 'text-pink-300', fill: '#fee2e2' })),
                         React.createElement('p', { className: 'text-slate-800 font-black text-base mb-1' }, '這裡空空的...'),
                         React.createElement('p', { className: 'text-slate-400 font-bold text-xs' }, '快點跟另一半一起新增願望吧！ ✨'),
                         React.createElement('button', { onClick: () => setIsModalOpen(true), className: 'mt-6 text-sweet-pink text-xs font-black underline underline-offset-4' }, '點我開始新增')
-                    ]) : React.createElement('div', { className: 'text-center py-20 px-10' }, [
-                         React.createElement('p', { className: 'text-slate-400 font-bold text-xs' }, '尚未有已完成的踩點紀錄喔！ 📸')
+                    ]) : React.createElement('div', { key: 'empty2', className: 'text-center py-20 px-10' }, [
+                         React.createElement('p', { className: 'text-slate-400 font-bold text-xs' }, searchQuery ? '找不到符合的願望喔！ 🔍' : '尚未有已完成的踩點紀錄喔！ 📸')
                     ])) :
                     filteredItems.map(item => React.createElement('div', { key: item.id, className: 'bg-white rounded-[2rem] p-6 border border-pink-50 shadow-sm relative animate-in' }, [
                         React.createElement('div', { className: 'flex justify-between items-start mb-4' }, [
@@ -458,17 +498,30 @@
                             React.createElement('div', { className: 'flex gap-1.5' }, [
                                 React.createElement('button', { onClick: () => toggleComplete(item), className: `p-2.5 rounded-full flex items-center justify-center transition-all ${item.completed ? 'bg-green-400 text-white shadow-lg' : 'bg-slate-50 text-slate-300 hover:text-sweet-pink'}` }, React.createElement(RawIcon, { name: 'checkCircle', size: 20 })),
                                 !item.completed && React.createElement('button', { onClick: () => {
+                                    const isPredefined = PREDEFINED_RESTAURANT_TYPES.includes(item.subCategory);
                                     setEditingItem(item);
-                                    setFormData({ title: item.title, category: item.category, dateRange: item.dateRange || '', description: item.description || '', completed: item.completed });
+                                    setFormData({ 
+                                        title: item.title, category: item.category, dateRange: item.dateRange || '', description: item.description || '', completed: item.completed,
+                                        subCategory: item.subCategory ? (isPredefined ? item.subCategory : '其他') : '',
+                                        customSubCategory: item.subCategory && !isPredefined ? item.subCategory : ''
+                                    });
                                     setIsModalOpen(true);
                                 }, className: 'p-2.5 bg-slate-50 text-slate-300 hover:text-blue-400 rounded-full flex items-center justify-center transition-all' }, React.createElement(RawIcon, { name: 'edit', size: 20 })),
                                 !item.completed && React.createElement('button', { onClick: () => setDeleteConfirm({ isOpen: true, itemId: item.id }), className: 'p-2.5 bg-slate-50 text-slate-300 hover:text-red-400 rounded-full flex items-center justify-center transition-all' }, React.createElement(RawIcon, { name: 'trash', size: 20 }))
                             ])
                         ]),
-                        React.createElement('h3', { className: 'text-xl font-black mb-1.5 text-slate-800' }, item.title),
-                        item.category === 'event' && item.dateRange && React.createElement('div', { className: 'text-sweet-pink text-xs font-bold mb-2.5 flex items-center gap-1.5 bg-pink-50 px-3 py-1.5 rounded-lg w-fit' }, [
-                            React.createElement(RawIcon, { name: 'calendar', size: 14 }), item.dateRange
+                        React.createElement('h3', { className: 'text-xl font-black mb-2 text-slate-800' }, item.title),
+                        
+                        // 標籤區：顯示事件日期或餐廳分類
+                        React.createElement('div', { className: 'flex gap-2 mb-3 flex-wrap' }, [
+                            item.category === 'event' && item.dateRange && React.createElement('div', { key: 'date', className: 'text-sweet-pink text-xs font-bold flex items-center gap-1.5 bg-pink-50 px-3 py-1.5 rounded-lg w-fit' }, [
+                                React.createElement(RawIcon, { name: 'calendar', size: 14 }), item.dateRange
+                            ]),
+                            item.category === 'restaurant' && item.subCategory && React.createElement('div', { key: 'subCat', className: 'text-orange-500 text-xs font-bold flex items-center gap-1.5 bg-orange-50 px-3 py-1.5 rounded-lg w-fit border border-orange-100/50' }, [
+                                React.createElement(RawIcon, { name: 'utensils', size: 12 }), item.subCategory
+                            ])
                         ]),
+
                         React.createElement('p', { className: 'text-slate-500 text-sm mb-5 leading-relaxed whitespace-pre-wrap' }, item.description),
                         React.createElement('div', { className: 'flex items-center justify-between pt-4 border-t border-slate-50' }, [
                             React.createElement('div', { className: 'flex items-center gap-1.5 text-[10px] font-bold text-slate-400' }, [
@@ -497,7 +550,7 @@
                             }, [React.createElement(RawIcon, { name: 'plus', size: 18 }), '分享我的踩點心得'])
                         ])
                     ]))
-                ),
+                ]),
 
                 // 獨立彈窗：專屬配對碼
                 isCodeModalOpen && React.createElement('div', { key: 'code-modal', className: 'fixed inset-0 z-[110] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md' }, 
@@ -524,7 +577,6 @@
                         profile.name && React.createElement('button', { onClick: () => setIsProfileModalOpen(false), className: 'absolute top-6 right-6 text-slate-300 hover:text-pink-400 transition-colors' }, React.createElement(RawIcon, { name: 'x', size: 24 })),
                         
                         React.createElement('div', { className: 'space-y-8' }, [
-                            // 暱稱設定
                             React.createElement('section', null, [
                                 React.createElement('h2', { className: 'text-xl font-black mb-1 text-slate-800' }, '個人設定'),
                                 React.createElement('p', { className: 'text-[10px] font-bold text-slate-400 mb-6 uppercase tracking-wider' }, 'Profile Settings'),
@@ -537,13 +589,11 @@
                                 ])
                             ]),
 
-                            // 配對選項 (已設定暱稱時顯示)
                             profile.name && React.createElement('section', { className: 'animate-in pt-6 border-t-2 border-dashed border-pink-50 space-y-4' }, [
                                 React.createElement('h3', { className: 'text-sm font-black text-slate-800 flex items-center gap-2' }, [
                                     React.createElement(RawIcon, { name: 'link', size: 16, className: 'text-sweet-pink' }), '與另一半連線'
                                 ]),
                                 
-                                // 配對碼展開框
                                 React.createElement('div', { className: 'space-y-3' }, [
                                     React.createElement('button', { 
                                         onClick: () => setShowMyCodeSection(!showMyCodeSection),
@@ -563,7 +613,6 @@
                                     ])
                                 ]),
 
-                                // 輸入對方代碼
                                 !partner.partnerId && React.createElement('div', { className: 'space-y-3 pt-2' }, [
                                     React.createElement('p', { className: 'text-[10px] font-bold text-slate-400 pl-1' }, '輸入對方的配對碼：'),
                                     React.createElement('div', { className: 'flex flex-col gap-2' }, [
@@ -577,7 +626,6 @@
                                     ])
                                 ]),
 
-                                // 已配對狀態
                                 partner.partnerId && React.createElement('div', { className: 'bg-green-50 p-4 rounded-2xl flex items-center gap-3 border border-green-100' }, [
                                     React.createElement(RawIcon, { name: 'checkCircle', size: 20, className: 'text-green-500' }),
                                     React.createElement('p', { className: 'text-xs font-black text-green-700' }, `已連線到：${partner.partnerName}`)
@@ -594,21 +642,42 @@
                             React.createElement('h2', { className: 'text-xl font-black text-slate-800' }, editingItem ? '編輯願望' : '新增願望'),
                             React.createElement('button', { onClick: closeMainModal, className: 'text-slate-300 hover:text-sweet-pink p-1 transition-colors flex items-center justify-center' }, React.createElement(RawIcon, { name: 'x', size: 24 }))
                         ]),
-                        React.createElement('form', { onSubmit: handleSubmit, className: 'space-y-5' }, [
-                            React.createElement('div', { className: 'grid grid-cols-3 gap-2' }, [
+                        React.createElement('form', { onSubmit: handleSubmit, className: 'space-y-4' }, [
+                            // 類別選擇器
+                            React.createElement('div', { className: 'grid grid-cols-3 gap-2 mb-2' }, [
                                 { id: 'restaurant', label: '餐廳', icon: 'utensils' },
                                 { id: 'spot', label: '景點', icon: 'mapPin' },
                                 { id: 'event', label: '活動', icon: 'music' }
                             ].map(c => 
-                                React.createElement('button', { key: c.id, type: 'button', onClick: () => setFormData({...formData, category: c.id}), className: `py-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all ${formData.category === c.id ? 'border-sweet-pink bg-pink-50 text-sweet-pink shadow-sm' : 'border-slate-50 text-slate-300'}` }, [
+                                React.createElement('button', { key: c.id, type: 'button', onClick: () => setFormData({...formData, category: c.id, subCategory: '', customSubCategory: ''}), className: `py-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all ${formData.category === c.id ? 'border-sweet-pink bg-pink-50 text-sweet-pink shadow-sm' : 'border-slate-50 text-slate-300'}` }, [
                                     React.createElement(RawIcon, { name: c.icon, size: 24, className: formData.category === c.id ? 'text-sweet-pink' : 'text-slate-200' }),
                                     React.createElement('span', { className: 'text-[10px] font-black' }, c.label)
                                 ])
                             )),
+                            
+                            // 新增：餐廳子分類選擇器
+                            formData.category === 'restaurant' && React.createElement('div', { className: 'bg-slate-50/50 p-3 rounded-2xl border border-slate-100' }, [
+                                React.createElement('div', { className: 'flex flex-wrap gap-2' }, 
+                                    PREDEFINED_RESTAURANT_TYPES.map(type => 
+                                        React.createElement('button', { 
+                                            key: type, type: 'button', 
+                                            onClick: () => setFormData({...formData, subCategory: type}),
+                                            className: `px-3 py-1.5 rounded-full text-[10px] font-black transition-all ${formData.subCategory === type ? 'bg-orange-400 text-white shadow-sm' : 'bg-white text-slate-500 border border-slate-200 hover:border-orange-200'}`
+                                        }, type)
+                                    )
+                                ),
+                                formData.subCategory === '其他' && React.createElement('input', { 
+                                    className: 'w-full p-3 mt-3 bg-white rounded-xl text-sm font-black outline-none border border-slate-200 focus:border-orange-300 focus:ring-2 ring-orange-50 text-slate-700 transition-all placeholder:text-slate-300', 
+                                    placeholder: '請輸入餐廳分類...', 
+                                    value: formData.customSubCategory, 
+                                    onChange: e => setFormData({...formData, customSubCategory: e.target.value}) 
+                                })
+                            ]),
+
                             React.createElement('input', { className: 'w-full p-4 bg-slate-50 rounded-xl font-black outline-none focus:ring-4 ring-pink-100 text-slate-700', placeholder: '要把什麼列入計畫？', value: formData.title, onChange: e => setFormData({...formData, title: e.target.value}), required: true }),
                             formData.category === 'event' && React.createElement('input', { className: 'w-full p-4 bg-pink-50/50 rounded-xl text-sweet-pink font-black outline-none', placeholder: '日期時間 (如: 5/20)', value: formData.dateRange, onChange: e => setFormData({...formData, dateRange: e.target.value}) }),
                             React.createElement('textarea', { className: 'w-full p-4 bg-slate-50 rounded-xl h-24 outline-none focus:ring-4 ring-pink-100 text-slate-600', placeholder: '更多細節...', value: formData.description, onChange: e => setFormData({...formData, description: e.target.value}) }),
-                            React.createElement('button', { type: 'submit', className: 'w-full bg-sweet-pink text-white py-4.5 rounded-[1.5rem] font-black text-lg active:scale-95 transition-all shadow-md' }, '確定送出')
+                            React.createElement('button', { type: 'submit', className: 'w-full bg-sweet-pink text-white py-4.5 rounded-[1.5rem] font-black text-lg active:scale-95 transition-all shadow-md mt-2' }, '確定送出')
                         ])
                     ])
                 ),
