@@ -81,7 +81,8 @@
             calendar: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
             qr: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg>`,
             chevronDown: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`,
-            chevronUp: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>`
+            chevronUp: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>`,
+            arrowUp: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>`
         };
 
         const RawIcon = ({ name, size = 18, className = "", fill = "none" }) => {
@@ -95,7 +96,6 @@
 
         function App() {
             const [user, setUser] = useState(null);
-            // 核心變數：強迫全局依賴這個穩定的 userId，忽略 Firebase 亂變的 UID
             const [userId, setUserId] = useState(null); 
             
             const [profile, setProfile] = useState({ name: '', shortCode: '' });
@@ -115,6 +115,7 @@
             const [pairingInput, setPairingInput] = useState('');
             const [toast, setToast] = useState({ show: false, message: '' });
             const [localNameInput, setLocalNameInput] = useState('');
+            const [showScrollTop, setShowScrollTop] = useState(false);
 
             const [formData, setFormData] = useState({
                 title: '', category: 'restaurant', dateRange: '', description: '', completed: false
@@ -125,23 +126,31 @@
                 setTimeout(() => setToast({ show: false, message: '' }), 3000);
             }, []);
 
-            // 1. 核心修復：強制鎖定身份
+            // 監聽滾動以顯示「回到頂部」按鈕
+            useEffect(() => {
+                const handleScroll = () => {
+                    setShowScrollTop(window.scrollY > 300);
+                };
+                window.addEventListener('scroll', handleScroll);
+                return () => window.removeEventListener('scroll', handleScroll);
+            }, []);
+
+            const scrollToTop = () => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            };
+
+            // 1. 核心修復：強制鎖定身份（解決刷新問題）
             useEffect(() => {
                 const unsubscribe = onAuthStateChanged(auth, async (currUser) => {
                     if (currUser) {
-                        // 已經有用戶紀錄（重新整理會進入這裡）
                         setUser(currUser);
-                        
-                        // 檢查本地是否有舊的 ID
                         let savedUid = localStorage.getItem('couple_wishlist_uid_v4');
                         if (!savedUid) {
                             savedUid = currUser.uid;
                             localStorage.setItem('couple_wishlist_uid_v4', savedUid);
                         }
-                        setUserId(savedUid);
-                        // 將系統全數綁定至此穩定的 userId
+                        setUserId(savedUid); 
                     } else {
-                        // 確定完全沒有用戶紀錄，才建立新的匿名登入
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                             try {
                                 await signInWithCustomToken(auth, __initial_auth_token);
@@ -153,7 +162,6 @@
                         }
                     }
                 });
-
                 return () => unsubscribe();
             }, []);
 
@@ -251,7 +259,6 @@
                     const partnerUid = scSnap.data().uid;
                     const partnerName = scSnap.data().name;
 
-                    // 檢查對方是否已經跟別人配對了 (防止一對多)
                     const partnerProfileRef = doc(db, 'artifacts', appId, 'users', partnerUid, 'profile', 'info');
                     const partnerProfileSnap = await getDoc(partnerProfileRef);
                     if (partnerProfileSnap.exists()) {
@@ -262,7 +269,6 @@
                         }
                     }
 
-                    // 雙向配對寫入
                     await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'info'), {
                         partnerId: partnerUid,
                         partnerName: partnerName
@@ -273,7 +279,6 @@
                         partnerName: profile.name
                     });
 
-                    // 寫入公共配對大廳，雙方即時感應
                     const pairId = [userId, partnerUid].sort().join('_');
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pairings', pairId), {
                         userA: userId,
@@ -333,9 +338,14 @@
                 setFormData({ title: '', category: 'restaurant', dateRange: '', description: '', completed: false });
             };
 
+            // 修改：打勾時記錄完成時間
             const toggleComplete = async (item) => {
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'wishlist', item.id);
-                await updateDoc(docRef, { completed: !item.completed });
+                const updateData = { completed: !item.completed };
+                if (!item.completed) {
+                    updateData.completedAt = new Date().toISOString(); // 新增時間戳記
+                }
+                await updateDoc(docRef, updateData);
             };
 
             const submitRating = async () => {
@@ -350,10 +360,21 @@
                 showToast("評價已儲存");
             };
 
+            // 修改：讓已完成的項目根據完成時間排序
             const filteredItems = useMemo(() => {
-                if (filter === 'all') return items.filter(i => !i.completed);
-                if (filter === 'completed') return items.filter(i => i.completed);
-                return items.filter(i => i.category === filter && !i.completed);
+                let result = [];
+                if (filter === 'all') result = items.filter(i => !i.completed);
+                else if (filter === 'completed') result = items.filter(i => i.completed);
+                else result = items.filter(i => i.category === filter && !i.completed);
+
+                if (filter === 'completed') {
+                    result.sort((a, b) => {
+                        const timeA = a.completedAt ? new Date(a.completedAt).getTime() : new Date(a.createdAt).getTime();
+                        const timeB = b.completedAt ? new Date(b.completedAt).getTime() : new Date(b.createdAt).getTime();
+                        return timeB - timeA; // 最新完成的排最上面
+                    });
+                }
+                return result;
             }, [items, filter]);
 
             if (!userId || !user) return React.createElement('div', { className: 'min-h-screen flex items-center justify-center bg-[#fff5f7]' }, [
@@ -362,7 +383,7 @@
 
             return React.createElement('div', { className: 'min-h-screen pb-24 bg-[#fff5f7]' }, [
                 // Toast
-                toast.show && React.createElement('div', { className: 'fixed top-10 left-1/2 -translate-x-1/2 z-[200] bg-slate-800 text-white px-6 py-3 rounded-2xl shadow-xl font-bold text-sm animate-in flex items-center gap-2' }, [
+                toast.show && React.createElement('div', { key: 'toast', className: 'fixed top-10 left-1/2 -translate-x-1/2 z-[200] bg-slate-800 text-white px-6 py-3 rounded-2xl shadow-xl font-bold text-sm animate-in flex items-center gap-2' }, [
                     React.createElement(RawIcon, { name: 'heart', size: 14, fill: '#ff85a2' }), toast.message
                 ]),
 
@@ -479,7 +500,7 @@
                 ),
 
                 // 獨立彈窗：專屬配對碼
-                isCodeModalOpen && React.createElement('div', { className: 'fixed inset-0 z-[110] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md' }, 
+                isCodeModalOpen && React.createElement('div', { key: 'code-modal', className: 'fixed inset-0 z-[110] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md' }, 
                     React.createElement('div', { className: 'bg-white w-full max-sm rounded-[2.5rem] p-10 shadow-2xl animate-in text-center relative' }, [
                         React.createElement('button', { onClick: () => setIsCodeModalOpen(false), className: 'absolute top-6 right-6 text-slate-300 hover:text-pink-400 transition-colors' }, React.createElement(RawIcon, { name: 'x', size: 24 })),
                         
@@ -498,7 +519,7 @@
                 ),
 
                 // 彈窗：個人資訊與配對輸入
-                isProfileModalOpen && React.createElement('div', { className: 'fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md overflow-y-auto' }, 
+                isProfileModalOpen && React.createElement('div', { key: 'profile-modal', className: 'fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md overflow-y-auto' }, 
                     React.createElement('div', { className: 'bg-white w-full max-sm rounded-[2.5rem] p-8 shadow-2xl animate-in relative my-auto' }, [
                         profile.name && React.createElement('button', { onClick: () => setIsProfileModalOpen(false), className: 'absolute top-6 right-6 text-slate-300 hover:text-pink-400 transition-colors' }, React.createElement(RawIcon, { name: 'x', size: 24 })),
                         
@@ -567,7 +588,7 @@
                 ),
 
                 // Modal: Add/Edit
-                isModalOpen && React.createElement('div', { className: 'fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm' }, 
+                isModalOpen && React.createElement('div', { key: 'edit-modal', className: 'fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm' }, 
                     React.createElement('div', { className: 'bg-white w-full max-md rounded-t-[2.5rem] sm:rounded-[2rem] p-8 animate-in shadow-2xl overflow-hidden' }, [
                         React.createElement('div', { className: 'flex justify-between items-center mb-6' }, [
                             React.createElement('h2', { className: 'text-xl font-black text-slate-800' }, editingItem ? '編輯願望' : '新增願望'),
@@ -593,7 +614,7 @@
                 ),
 
                 // Modal: Rating
-                ratingModal.isOpen && React.createElement('div', { className: 'fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm' }, 
+                ratingModal.isOpen && React.createElement('div', { key: 'rating-modal', className: 'fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm' }, 
                     React.createElement('div', { className: 'bg-white w-full max-w-sm rounded-[2.5rem] p-8 animate-in shadow-2xl relative' }, [
                         React.createElement('button', { onClick: () => setRatingModal({isOpen: false}), className: 'absolute top-6 right-6 text-slate-300 hover:text-pink-400 flex items-center justify-center' }, React.createElement(RawIcon, { name: 'x', size: 20 })),
                         React.createElement('h2', { className: 'text-lg font-black text-center mb-6 text-slate-800' }, '這次踩點給幾分？'),
@@ -608,7 +629,7 @@
                 ),
 
                 // Modal: Delete
-                deleteConfirm.isOpen && React.createElement('div', { className: 'fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm' }, 
+                deleteConfirm.isOpen && React.createElement('div', { key: 'delete-modal', className: 'fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm' }, 
                     React.createElement('div', { className: 'bg-white w-full max-w-xs rounded-[2rem] p-8 text-center animate-in shadow-2xl' }, [
                         React.createElement('h2', { className: 'text-lg font-black text-slate-800 mb-2' }, '確定要移除？'),
                         React.createElement('div', { className: 'flex flex-col gap-2 mt-6' }, [
@@ -622,7 +643,14 @@
                     ])
                 ),
 
-                React.createElement('footer', { className: 'mt-12 text-center text-pink-200 text-[9px] font-black tracking-[0.3em] uppercase pb-8' }, 'Shared Love List • Build Together')
+                // 浮動回到頂部按鈕 (只有滑動超過300px才會出現)
+                showScrollTop && React.createElement('button', {
+                    key: 'scroll-top',
+                    onClick: scrollToTop,
+                    className: 'fixed bottom-8 right-6 z-[90] w-12 h-12 bg-white/90 backdrop-blur-md text-sweet-pink rounded-full shadow-xl border-2 border-pink-100 flex items-center justify-center hover:bg-pink-50 transition-all active:scale-90 animate-in'
+                }, React.createElement(RawIcon, { name: 'arrowUp', size: 24 })),
+
+                React.createElement('footer', { key: 'footer', className: 'mt-12 text-center text-pink-200 text-[9px] font-black tracking-[0.3em] uppercase pb-8' }, 'Shared Love List • Build Together')
             ]);
         }
 
