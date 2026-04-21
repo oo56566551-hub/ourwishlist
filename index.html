@@ -64,8 +64,6 @@
 
         const { useState, useEffect, useMemo, useCallback } = React;
 
-        const PREDEFINED_RESTAURANT_TYPES = ['火鍋', '燒烤', '港式', '義式', '台式', '日式', '早午餐', '咖啡廳/甜點', '漢堡', '其他'];
-
         const SVG_LIB = {
             plus: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>`,
             heart: (fill = "none") => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="${fill}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>`,
@@ -101,7 +99,7 @@
             const [user, setUser] = useState(null);
             const [userId, setUserId] = useState(null); 
             
-            const [profile, setProfile] = useState({ name: '', shortCode: '' });
+            const [profile, setProfile] = useState({ name: '', shortCode: '', restaurantTags: [] });
             const [partner, setPartner] = useState({ partnerId: null, partnerName: '' });
             const [items, setItems] = useState([]);
             const [filter, setFilter] = useState('all');
@@ -121,9 +119,16 @@
             const [localNameInput, setLocalNameInput] = useState('');
             const [showScrollTop, setShowScrollTop] = useState(false);
 
+            // 新增標籤管理狀態
+            const [isEditingTags, setIsEditingTags] = useState(false);
+            const [newTagInput, setNewTagInput] = useState('');
+
             const [formData, setFormData] = useState({
-                title: '', category: 'restaurant', dateRange: '', description: '', completed: false, subCategory: '', customSubCategory: ''
+                title: '', category: 'restaurant', dateRange: '', description: '', completed: false, subCategory: ''
             });
+
+            // 動態取得使用者的專屬分類 (若無則給預設值)
+            const myTags = profile.restaurantTags || ['火鍋', '燒烤', '港式', '義式', '日料', '早午餐', '甜點', '漢堡', '小吃'];
 
             const showToast = useCallback((message) => {
                 setToast({ show: true, message });
@@ -132,16 +137,12 @@
 
             // 監聽滾動以顯示「回到頂部」按鈕
             useEffect(() => {
-                const handleScroll = () => {
-                    setShowScrollTop(window.scrollY > 300);
-                };
+                const handleScroll = () => setShowScrollTop(window.scrollY > 300);
                 window.addEventListener('scroll', handleScroll);
                 return () => window.removeEventListener('scroll', handleScroll);
             }, []);
 
-            const scrollToTop = () => {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            };
+            const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
             // 1. 核心修復：強制鎖定身份
             useEffect(() => {
@@ -156,11 +157,8 @@
                         setUserId(savedUid); 
                     } else {
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            try {
-                                await signInWithCustomToken(auth, __initial_auth_token);
-                            } catch (e) {
-                                await signInAnonymously(auth);
-                            }
+                            try { await signInWithCustomToken(auth, __initial_auth_token); } 
+                            catch (e) { await signInAnonymously(auth); }
                         } else {
                             await signInAnonymously(auth);
                         }
@@ -169,7 +167,7 @@
                 return () => unsubscribe();
             }, []);
 
-            // 2. 監聽個人資料
+            // 2. 監聽個人資料與專屬分類
             useEffect(() => {
                 if (!userId) return;
                 const profileRef = doc(db, 'artifacts', appId, 'users', userId, 'profile', 'info');
@@ -177,6 +175,11 @@
                 const unsubscribe = onSnapshot(profileRef, async (docSnap) => {
                     if (docSnap.exists()) {
                         const data = docSnap.data();
+                        // 確保舊用戶也有預設標籤結構
+                        if (!data.restaurantTags) {
+                            data.restaurantTags = ['火鍋', '燒烤', '港式', '義式', '日料', '早午餐', '甜點', '漢堡', '小吃'];
+                            updateDoc(profileRef, { restaurantTags: data.restaurantTags });
+                        }
                         setProfile(data);
                         setLocalNameInput(data.name || '');
                         
@@ -188,7 +191,10 @@
                         if (!data.name) setIsProfileModalOpen(true);
                     } else {
                         const sc = userId.substring(0, 8).toUpperCase();
-                        const newProfile = { name: '', shortCode: sc, uid: userId };
+                        const newProfile = { 
+                            name: '', shortCode: sc, uid: userId,
+                            restaurantTags: ['火鍋', '燒烤', '港式', '義式', '日料', '早午餐', '甜點', '漢堡', '小吃'] 
+                        };
                         await setDoc(profileRef, newProfile);
                         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'short_codes', sc), { uid: userId });
                         setProfile(newProfile);
@@ -230,35 +236,47 @@
                 return () => unsubscribe();
             }, [userId, partner.partnerId]);
 
+            // === 分類管理邏輯 ===
+            const addTag = () => {
+                const t = newTagInput.trim();
+                if (t && !myTags.includes(t)) {
+                    const newTags = [...myTags, t];
+                    updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'info'), { restaurantTags: newTags });
+                    // 即時更新畫面
+                    setProfile(prev => ({...prev, restaurantTags: newTags}));
+                }
+                setNewTagInput('');
+            };
+
+            const removeTag = (tag) => {
+                const newTags = myTags.filter(t => t !== tag);
+                updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'info'), { restaurantTags: newTags });
+                setProfile(prev => ({...prev, restaurantTags: newTags}));
+                // 如果刪掉的剛好是正在選的分類，就清空選擇
+                if (formData.subCategory === tag) {
+                    setFormData(prev => ({...prev, subCategory: ''}));
+                }
+            };
+            // ====================
+
             const saveProfile = async (e) => {
                 e.preventDefault();
                 if (!localNameInput.trim() || !userId) return;
                 const name = localNameInput.trim();
-                
                 await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'info'), { name });
-                
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'short_codes', profile.shortCode), { 
-                    uid: userId, name: name
-                }, { merge: true });
-
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'short_codes', profile.shortCode), { uid: userId, name: name }, { merge: true });
                 showToast("個人資料已更新");
                 if (partner.partnerId) setIsProfileModalOpen(false);
             };
 
             const handlePairing = async () => {
                 const input = pairingInput.trim().toUpperCase();
-                if (!input || input === profile.shortCode) {
-                    showToast("請輸入正確的配對碼");
-                    return;
-                }
+                if (!input || input === profile.shortCode) { showToast("請輸入正確的配對碼"); return; }
                 
                 try {
                     const scRef = doc(db, 'artifacts', appId, 'public', 'data', 'short_codes', input);
                     const scSnap = await getDoc(scRef);
-                    if (!scSnap.exists() || !scSnap.data().name) {
-                        showToast("找不到該用戶或對方尚未設定暱稱");
-                        return;
-                    }
+                    if (!scSnap.exists() || !scSnap.data().name) { showToast("找不到該用戶或對方尚未設定暱稱"); return; }
                     
                     const partnerUid = scSnap.data().uid;
                     const partnerName = scSnap.data().name;
@@ -267,38 +285,21 @@
                     const partnerProfileSnap = await getDoc(partnerProfileRef);
                     if (partnerProfileSnap.exists()) {
                         const partnerProfileData = partnerProfileSnap.data();
-                        if (partnerProfileData.partnerId && partnerProfileData.partnerId !== userId) {
-                            showToast("該代碼的用戶已經與其他人配對了！");
-                            return;
-                        }
+                        if (partnerProfileData.partnerId && partnerProfileData.partnerId !== userId) { showToast("該代碼的用戶已經與其他人配對了！"); return; }
                     }
 
-                    await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'info'), {
-                        partnerId: partnerUid,
-                        partnerName: partnerName
-                    });
-
-                    await updateDoc(partnerProfileRef, {
-                        partnerId: userId,
-                        partnerName: profile.name
-                    });
+                    await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'profile', 'info'), { partnerId: partnerUid, partnerName: partnerName });
+                    await updateDoc(partnerProfileRef, { partnerId: userId, partnerName: profile.name });
 
                     const pairId = [userId, partnerUid].sort().join('_');
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pairings', pairId), {
-                        userA: userId,
-                        userAName: profile.name,
-                        userB: partnerUid,
-                        userBName: partnerName,
-                        timestamp: new Date().toISOString()
+                        userA: userId, userAName: profile.name, userB: partnerUid, userBName: partnerName, timestamp: new Date().toISOString()
                     });
 
                     showToast("配對成功！ ❤️");
                     setPairingInput('');
                     setIsProfileModalOpen(false);
-                } catch (err) {
-                    console.error("Pairing Error:", err);
-                    showToast("配對失敗");
-                }
+                } catch (err) { console.error("Pairing Error:", err); showToast("配對失敗"); }
             };
 
             const copyMyShortCode = () => {
@@ -316,28 +317,21 @@
                 e.preventDefault();
                 if (!formData.title || !userId) return;
                 
-                let finalSubCategory = '';
-                if (formData.category === 'restaurant') {
-                    finalSubCategory = formData.subCategory === '其他' ? formData.customSubCategory.trim() : formData.subCategory;
-                }
-
                 try {
                     if (editingItem) {
                         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'wishlist', editingItem.id);
                         await updateDoc(docRef, {
                             title: formData.title, category: formData.category,
                             dateRange: formData.category === 'event' ? formData.dateRange : '',
-                            subCategory: finalSubCategory,
+                            subCategory: formData.category === 'restaurant' ? formData.subCategory : '',
                             description: formData.description
                         });
                     } else {
                         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'wishlist'), {
                             ...formData,
                             dateRange: formData.category === 'event' ? formData.dateRange : '',
-                            subCategory: finalSubCategory,
-                            ratings: {}, createdBy: userId,
-                            createdByName: profile.name || '夥伴',
-                            createdAt: new Date().toISOString()
+                            subCategory: formData.category === 'restaurant' ? formData.subCategory : '',
+                            ratings: {}, createdBy: userId, createdByName: profile.name || '夥伴', createdAt: new Date().toISOString()
                         });
                     }
                     closeMainModal();
@@ -347,15 +341,14 @@
             const closeMainModal = () => {
                 setIsModalOpen(false);
                 setEditingItem(null);
-                setFormData({ title: '', category: 'restaurant', dateRange: '', description: '', completed: false, subCategory: '', customSubCategory: '' });
+                setIsEditingTags(false);
+                setFormData({ title: '', category: 'restaurant', dateRange: '', description: '', completed: false, subCategory: '' });
             };
 
             const toggleComplete = async (item) => {
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'wishlist', item.id);
                 const updateData = { completed: !item.completed };
-                if (!item.completed) {
-                    updateData.completedAt = new Date().toISOString();
-                }
+                if (!item.completed) updateData.completedAt = new Date().toISOString();
                 await updateDoc(docRef, updateData);
             };
 
@@ -371,14 +364,13 @@
                 showToast("評價已儲存");
             };
 
-            // 列表過濾 (包含新增的搜尋邏輯與排序)
+            // 列表過濾與排序
             const filteredItems = useMemo(() => {
                 let result = [];
                 if (filter === 'all') result = items.filter(i => !i.completed);
                 else if (filter === 'completed') result = items.filter(i => i.completed);
                 else result = items.filter(i => i.category === filter && !i.completed);
 
-                // 處理搜尋關鍵字
                 if (searchQuery.trim()) {
                     const q = searchQuery.toLowerCase();
                     result = result.filter(i => 
@@ -452,7 +444,7 @@
                     { id: 'completed', label: '已踩點', icon: 'checkCircle' }
                 ].map(tab => React.createElement('button', {
                     key: tab.id,
-                    onClick: () => { setFilter(tab.id); setSearchQuery(''); }, // 切換分類時清空搜尋
+                    onClick: () => { setFilter(tab.id); setSearchQuery(''); }, 
                     className: `flex items-center gap-1.5 px-5 py-2.5 rounded-2xl text-xs font-black whitespace-nowrap transition-all ${filter === tab.id ? 'bg-sweet-pink text-white shadow-md' : 'bg-white text-slate-400 border border-pink-100 hover:bg-pink-50'}`
                 }, [
                     React.createElement(RawIcon, { name: tab.icon, size: 14, fill: filter === tab.id ? 'white' : 'none', className: filter === tab.id ? 'text-white' : 'text-slate-300' }), tab.label
@@ -461,21 +453,17 @@
                 // Main Content
                 React.createElement('main', { key: 'main', className: 'max-w-2xl mx-auto px-4 space-y-4' }, [
                     
-                    // 新增：搜尋列
+                    // 搜尋列
                     items.length > 0 && React.createElement('div', { key: 'search-bar', className: 'relative mb-2' }, [
                         React.createElement('div', { className: 'absolute inset-y-0 left-4 flex items-center pointer-events-none' },
                             React.createElement(RawIcon, { name: 'search', size: 16, className: 'text-pink-300' })
                         ),
                         React.createElement('input', {
-                            type: 'text',
-                            placeholder: '搜尋願望標題或分類...',
-                            value: searchQuery,
-                            onChange: (e) => setSearchQuery(e.target.value),
+                            type: 'text', placeholder: '搜尋願望標題或分類...', value: searchQuery, onChange: (e) => setSearchQuery(e.target.value),
                             className: 'w-full pl-10 pr-4 py-3.5 bg-white rounded-2xl border border-pink-50 text-sm font-bold text-slate-700 outline-none focus:border-pink-200 focus:ring-2 focus:ring-pink-50 transition-all shadow-sm placeholder:text-pink-200'
                         }),
                         searchQuery && React.createElement('button', { 
-                            onClick: () => setSearchQuery(''), 
-                            className: 'absolute inset-y-0 right-4 flex items-center text-slate-300 hover:text-pink-400' 
+                            onClick: () => setSearchQuery(''), className: 'absolute inset-y-0 right-4 flex items-center text-slate-300 hover:text-pink-400' 
                         }, React.createElement(RawIcon, { name: 'x', size: 14 }))
                     ]),
 
@@ -498,12 +486,10 @@
                             React.createElement('div', { className: 'flex gap-1.5' }, [
                                 React.createElement('button', { onClick: () => toggleComplete(item), className: `p-2.5 rounded-full flex items-center justify-center transition-all ${item.completed ? 'bg-green-400 text-white shadow-lg' : 'bg-slate-50 text-slate-300 hover:text-sweet-pink'}` }, React.createElement(RawIcon, { name: 'checkCircle', size: 20 })),
                                 !item.completed && React.createElement('button', { onClick: () => {
-                                    const isPredefined = PREDEFINED_RESTAURANT_TYPES.includes(item.subCategory);
                                     setEditingItem(item);
                                     setFormData({ 
                                         title: item.title, category: item.category, dateRange: item.dateRange || '', description: item.description || '', completed: item.completed,
-                                        subCategory: item.subCategory ? (isPredefined ? item.subCategory : '其他') : '',
-                                        customSubCategory: item.subCategory && !isPredefined ? item.subCategory : ''
+                                        subCategory: item.subCategory || ''
                                     });
                                     setIsModalOpen(true);
                                 }, className: 'p-2.5 bg-slate-50 text-slate-300 hover:text-blue-400 rounded-full flex items-center justify-center transition-all' }, React.createElement(RawIcon, { name: 'edit', size: 20 })),
@@ -512,7 +498,6 @@
                         ]),
                         React.createElement('h3', { className: 'text-xl font-black mb-2 text-slate-800' }, item.title),
                         
-                        // 標籤區：顯示事件日期或餐廳分類
                         React.createElement('div', { className: 'flex gap-2 mb-3 flex-wrap' }, [
                             item.category === 'event' && item.dateRange && React.createElement('div', { key: 'date', className: 'text-sweet-pink text-xs font-bold flex items-center gap-1.5 bg-pink-50 px-3 py-1.5 rounded-lg w-fit' }, [
                                 React.createElement(RawIcon, { name: 'calendar', size: 14 }), item.dateRange
@@ -643,35 +628,55 @@
                             React.createElement('button', { onClick: closeMainModal, className: 'text-slate-300 hover:text-sweet-pink p-1 transition-colors flex items-center justify-center' }, React.createElement(RawIcon, { name: 'x', size: 24 }))
                         ]),
                         React.createElement('form', { onSubmit: handleSubmit, className: 'space-y-4' }, [
-                            // 類別選擇器
                             React.createElement('div', { className: 'grid grid-cols-3 gap-2 mb-2' }, [
                                 { id: 'restaurant', label: '餐廳', icon: 'utensils' },
                                 { id: 'spot', label: '景點', icon: 'mapPin' },
                                 { id: 'event', label: '活動', icon: 'music' }
                             ].map(c => 
-                                React.createElement('button', { key: c.id, type: 'button', onClick: () => setFormData({...formData, category: c.id, subCategory: '', customSubCategory: ''}), className: `py-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all ${formData.category === c.id ? 'border-sweet-pink bg-pink-50 text-sweet-pink shadow-sm' : 'border-slate-50 text-slate-300'}` }, [
+                                React.createElement('button', { key: c.id, type: 'button', onClick: () => setFormData({...formData, category: c.id, subCategory: ''}), className: `py-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all ${formData.category === c.id ? 'border-sweet-pink bg-pink-50 text-sweet-pink shadow-sm' : 'border-slate-50 text-slate-300'}` }, [
                                     React.createElement(RawIcon, { name: c.icon, size: 24, className: formData.category === c.id ? 'text-sweet-pink' : 'text-slate-200' }),
                                     React.createElement('span', { className: 'text-[10px] font-black' }, c.label)
                                 ])
                             )),
                             
-                            // 新增：餐廳子分類選擇器
+                            // 更新：完全可自訂的標籤區塊
                             formData.category === 'restaurant' && React.createElement('div', { className: 'bg-slate-50/50 p-3 rounded-2xl border border-slate-100' }, [
-                                React.createElement('div', { className: 'flex flex-wrap gap-2' }, 
-                                    PREDEFINED_RESTAURANT_TYPES.map(type => 
+                                React.createElement('div', { className: 'flex justify-between items-center mb-2 px-1' }, [
+                                    React.createElement('span', { className: 'text-[10px] font-bold text-slate-400' }, '選擇或自訂餐廳分類'),
+                                    React.createElement('button', { 
+                                        type: 'button', 
+                                        onClick: () => setIsEditingTags(!isEditingTags),
+                                        className: `text-[10px] font-black transition-colors ${isEditingTags ? 'text-sweet-pink' : 'text-slate-400 hover:text-sweet-pink'}`
+                                    }, isEditingTags ? '完成編輯' : '編輯分類')
+                                ]),
+                                React.createElement('div', { className: 'flex flex-wrap gap-2 items-center' }, [
+                                    ...myTags.map(type => 
                                         React.createElement('button', { 
                                             key: type, type: 'button', 
-                                            onClick: () => setFormData({...formData, subCategory: type}),
-                                            className: `px-3 py-1.5 rounded-full text-[10px] font-black transition-all ${formData.subCategory === type ? 'bg-orange-400 text-white shadow-sm' : 'bg-white text-slate-500 border border-slate-200 hover:border-orange-200'}`
-                                        }, type)
-                                    )
-                                ),
-                                formData.subCategory === '其他' && React.createElement('input', { 
-                                    className: 'w-full p-3 mt-3 bg-white rounded-xl text-sm font-black outline-none border border-slate-200 focus:border-orange-300 focus:ring-2 ring-orange-50 text-slate-700 transition-all placeholder:text-slate-300', 
-                                    placeholder: '請輸入餐廳分類...', 
-                                    value: formData.customSubCategory, 
-                                    onChange: e => setFormData({...formData, customSubCategory: e.target.value}) 
-                                })
+                                            onClick: () => isEditingTags ? removeTag(type) : setFormData({...formData, subCategory: type}),
+                                            className: `relative px-3 py-1.5 rounded-full text-[10px] font-black transition-all ${
+                                                formData.subCategory === type && !isEditingTags ? 'bg-orange-400 text-white shadow-sm' : 'bg-white text-slate-500 border hover:border-orange-200 ' + (isEditingTags ? 'border-red-100 pr-6 hover:bg-red-50 hover:text-red-500 hover:border-red-200' : 'border-slate-200')
+                                            }`
+                                        }, [
+                                            type,
+                                            isEditingTags && React.createElement('span', { className: 'absolute right-2 top-1/2 -translate-y-1/2 text-[10px] opacity-60' }, '✕')
+                                        ])
+                                    ),
+                                    // 編輯模式下顯示的新增輸入框
+                                    isEditingTags && React.createElement('div', { className: 'flex items-center gap-1 bg-white rounded-full border border-orange-200 p-0.5 shadow-sm' }, [
+                                        React.createElement('input', {
+                                            className: 'w-20 px-2 py-1 bg-transparent text-[10px] font-black outline-none text-slate-700 placeholder:text-orange-200',
+                                            placeholder: '新分類...',
+                                            value: newTagInput,
+                                            onChange: e => setNewTagInput(e.target.value),
+                                            onKeyDown: e => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }
+                                        }),
+                                        React.createElement('button', {
+                                            type: 'button', onClick: addTag,
+                                            className: 'w-5 h-5 bg-orange-400 text-white rounded-full flex items-center justify-center active:scale-90 transition-transform'
+                                        }, React.createElement(RawIcon, { name: 'plus', size: 10 }))
+                                    ])
+                                ])
                             ]),
 
                             React.createElement('input', { className: 'w-full p-4 bg-slate-50 rounded-xl font-black outline-none focus:ring-4 ring-pink-100 text-slate-700', placeholder: '要把什麼列入計畫？', value: formData.title, onChange: e => setFormData({...formData, title: e.target.value}), required: true }),
